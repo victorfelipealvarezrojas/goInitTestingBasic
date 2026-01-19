@@ -16,11 +16,16 @@ func (app *application) routes() http.Handler {
 	mux.Use(app.AddIPToContext)      // middleware para agregar IP al contexto
 	mux.Use(app.Session.LoadAndSave) // middleware para manejar sesiones
 
+	mux.Route("/user", func(mux chi.Router) {
+		mux.Use(app.auth) // proteger rutas debajo de /user
+		mux.Get("/profile", app.Profile)
+	})
+
 	// register routes
 	mux.Get("/", app.Home)
 	mux.Post("/login", app.Login)
 
-	// sstatic assets
+	// static assets
 	fileServer := http.FileServer(http.Dir("./static/"))
 	mux.Handle("/static/*", http.StripPrefix("/static", fileServer))
 

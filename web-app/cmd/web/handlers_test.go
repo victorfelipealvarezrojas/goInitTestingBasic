@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -15,7 +16,7 @@ func Test_application_handlers(t *testing.T) {
 		url        string
 		statusCode int
 	}{
-		{"home", "/", http.StatusBadRequest},
+		{"home", "/", http.StatusOK},
 		{"404", "/not-found", http.StatusNotFound},
 	}
 
@@ -108,11 +109,67 @@ func Test_application_render_bad_template(t *testing.T) {
 		t.Error("expected error but did not get one")
 	}
 
+	pathToTemplates = "./../../templates/"
+
 }
 
 func getCtx(req *http.Request) context.Context {
 	ctx := context.WithValue(req.Context(), contextUserKey, "inknown")
 	return ctx
+}
+
+func Test_app_login(t *testing.T) {
+	var Tests = []struct {
+		name                     string
+		postedData               url.Values
+		expectedStatusCode       int
+		expectedLocationRedirect string
+	}{
+		{
+			name: "valid credemtial test",
+			postedData: url.Values{
+				"email":    {"admin@example.com"},
+				"password": {"secret"},
+			},
+			expectedStatusCode:       http.StatusSeeOther,
+			expectedLocationRedirect: "/user/profile",
+		},
+		{
+			name: "invalid credemtial test",
+			postedData: url.Values{
+				"email":    {"invalid@example.com"},
+				"password": {"invalid"},
+			},
+			expectedStatusCode:       http.StatusSeeOther,
+			expectedLocationRedirect: "/",
+		},
+	}
+
+	for _, e := range Tests {
+		req, _ := http.NewRequest("POST", "/login", strings.NewReader(e.postedData.Encode()))
+		req = addContextAndSessionToRequest(req, app)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rr := httptest.NewRecorder() // httptest.NewRecorder() crea un ResponseRecorder que actúa como un http.ResponseWriter falso para capturar la respuesta en tests.
+
+		handler := http.HandlerFunc(app.Login) // crea un manejador HTTP a partir de la función app.Login
+		handler.ServeHTTP(rr, req)             // sirve la solicitud HTTP utilizando el manejador y el request simulado
+
+		if rr.Code != e.expectedStatusCode {
+			t.Errorf("for %s expected status code %d but got %d", e.name, e.expectedStatusCode, rr.Code)
+		}
+
+		actualLocation, err := rr.Result().Location()
+
+		if err == nil {
+			if actualLocation.String() != e.expectedLocationRedirect {
+				t.Errorf("for %s expected redirect to %s but got %s", e.name, e.expectedLocationRedirect, actualLocation.String())
+			}
+		} else {
+			t.Errorf("%s: no location header set", e.name)
+		}
+
+	}
+
 }
 
 func addContextAndSessionToRequest(req *http.Request, app application) *http.Request {

@@ -1,19 +1,47 @@
 package main
 
 import (
-	"fmt"
 	"html/template"
 	"log"
 	"net/http"
 	"path"
 	"time"
+	"webapp/pkg/data"
 )
 
 var pathToTemplates = "./templates/"
 
 type templateData struct {
-	IP   string
-	Data map[string]any
+	IP    string
+	Data  map[string]any
+	Error string
+	Flash string
+	User  data.User
+}
+
+func (app *application) render(response http.ResponseWriter, request *http.Request,
+	name string, dataSubmit *templateData) error {
+
+	parseTemplate, err := template.ParseFiles(path.Join(pathToTemplates, name), path.Join(pathToTemplates, "Base.layout.gohtml"))
+	if err != nil {
+		http.Error(response, "Internal Server Error", http.StatusBadRequest)
+		return err
+	}
+
+	dataSubmit.IP = app.ipFromContext(request.Context())
+
+	dataSubmit.Error = app.Session.PopString(request.Context(), "errors")
+	dataSubmit.Flash = app.Session.PopString(request.Context(), "flash")
+	log.Println("Flash message:", dataSubmit.Flash)
+	log.Println("Error message:", dataSubmit.Error)
+
+	err = parseTemplate.Execute(response, dataSubmit)
+	if err != nil {
+		http.Error(response, "Internal Server Error"+err.Error(), http.StatusBadRequest)
+		return err
+	}
+
+	return nil
 }
 
 func (app *application) Home(response http.ResponseWriter, request *http.Request) {
@@ -31,6 +59,10 @@ func (app *application) Home(response http.ResponseWriter, request *http.Request
 	_ = app.render(response, request, "Home.page.gohtml", &templateData{Data: td})
 }
 
+func (app *application) Profile(w http.ResponseWriter, r *http.Request) {
+	_ = app.render(w, r, "profile.page.gohtml", &templateData{})
+}
+
 func (app *application) Login(response http.ResponseWriter, request *http.Request) {
 	err := request.ParseForm()
 	if err != nil {
@@ -44,35 +76,42 @@ func (app *application) Login(response http.ResponseWriter, request *http.Reques
 	form.Required("email", "password")
 
 	if !form.Valid() {
-		log.Println("Form is not valid")
-		http.Error(response, "invalid form submission", http.StatusBadRequest)
+		// redirect logiun page with errors message
+		app.Session.Put(request.Context(), "errors", "invalid login credentials")
+		http.Redirect(response, request, "/", http.StatusSeeOther)
 		return
 	}
 
 	email := request.Form.Get("email")
 	password := request.Form.Get("password")
 
-	log.Println(email, password)
+	user, err := app.DB.GetUserByEmail(email)
+	if err != nil {
+		app.Session.Put(request.Context(), "errors", "invalid login")
+		http.Redirect(response, request, "/", http.StatusSeeOther)
+		return
+	}
 
-	fmt.Fprint(response, email)
+	if !app.Authenticate(request, user, password) {
+		app.Session.Put(request.Context(), "errors", "invalid login credentials")
+		http.Redirect(response, request, "/", http.StatusSeeOther)
+		return
+	}
+
+	// prevent fixation attacks
+	_ = app.Session.RenewToken(request.Context())
+
+	app.Session.Put(request.Context(), "flash", "Successfully logged in!")
+
+	log.Println("User authenticated successfully")
+	http.Redirect(response, request, "/user/profile", http.StatusSeeOther)
+
 }
 
-func (app *application) render(response http.ResponseWriter, request *http.Request,
-	name string, data *templateData) error {
-
-	parseTemplate, err := template.ParseFiles(path.Join(pathToTemplates, name), path.Join(pathToTemplates, "Base.layout.gohtml"))
-	if err != nil {
-		http.Error(response, "Internal Server Error", http.StatusBadRequest)
-		return err
+func (app *application) Authenticate(r *http.Request, user *data.User, password string) bool {
+	if valid, err := user.PasswordMatches(password); err != nil || !valid {
+		return false
 	}
-
-	data.IP = app.ipFromContext(request.Context())
-
-	err = parseTemplate.Execute(response, data)
-	if err != nil {
-		http.Error(response, "Internal Server Error"+err.Error(), http.StatusBadRequest)
-		return err
-	}
-
-	return nil
+	app.Session.Put(r.Context(), "user", user)
+	return true
 }
