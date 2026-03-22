@@ -10,26 +10,18 @@ import (
 
 func Test_application_routes(t *testing.T) {
 
-	type Route struct {
+	registered := []struct {
 		route  string
 		method string
+	}{
+		{"/", "GET"},
+		{"/static/*", "GET"}, // necesita ser registrada
 	}
-
-	var registered = []Route{}
-
-	registered = append(registered, Route{
-		route:  "/",
-		method: "GET",
-	})
-
-	registered = append(registered, Route{
-		route:  "/static/*",
-		method: "GET",
-	})
 
 	mux := app.routes()
 
-	chiRoutes := mux.(chi.Routes) // Convierte a chi.Routes para poder inspeccionar
+	chiRoutes := mux.(chi.Routes) // Convierte a chi.Routes Porque app.routes() retorna http.Handler  la vista reducida que solo expone ServeHTTP.
+	//Para inspeccionar las rutas registradas necesitas chi.Routes — que expone métodos como Walk. Pero http.Handler no los tiene.
 
 	for _, route := range registered {
 		if !routeExists(route.route, route.method, chiRoutes) {

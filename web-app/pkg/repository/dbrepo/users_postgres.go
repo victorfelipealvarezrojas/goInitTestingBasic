@@ -13,11 +13,11 @@ import (
 const dbTimeout = time.Second * 3
 
 type PostgresDBRepo struct {
-	DB *sql.DB
+	DataBaseCnn *sql.DB
 }
 
 func (m *PostgresDBRepo) Connection() *sql.DB {
-	return m.DB
+	return m.DataBaseCnn
 }
 
 func (m *PostgresDBRepo) AllUsers() ([]*data.User, error) {
@@ -27,7 +27,7 @@ func (m *PostgresDBRepo) AllUsers() ([]*data.User, error) {
 	query := `select id, email, first_name, last_name, password, is_admin, created_at, updated_at
 	from users order by last_name`
 
-	rows, err := m.DB.QueryContext(ctx, query)
+	rows, err := m.DataBaseCnn.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +72,7 @@ func (m *PostgresDBRepo) GetUser(id int) (*data.User, error) {
 		    id = $1`
 
 	var user data.User
-	row := m.DB.QueryRowContext(ctx, query, id)
+	row := m.DataBaseCnn.QueryRowContext(ctx, query, id)
 
 	err := row.Scan(
 		&user.ID,
@@ -106,7 +106,7 @@ func (m *PostgresDBRepo) GetUserByEmail(email string) (*data.User, error) {
 		    email = $1`
 
 	var user data.User
-	row := m.DB.QueryRowContext(ctx, query, email)
+	row := m.DataBaseCnn.QueryRowContext(ctx, query, email)
 
 	err := row.Scan(
 		&user.ID,
@@ -140,7 +140,7 @@ func (m *PostgresDBRepo) UpdateUser(u data.User) error {
 		where id = $6
 	`
 
-	_, err := m.DB.ExecContext(ctx, stmt,
+	_, err := m.DataBaseCnn.ExecContext(ctx, stmt,
 		u.Email,
 		u.FirstName,
 		u.LastName,
@@ -163,7 +163,7 @@ func (m *PostgresDBRepo) DeleteUser(id int) error {
 
 	stmt := `delete from users where id = $1`
 
-	_, err := m.DB.ExecContext(ctx, stmt, id)
+	_, err := m.DataBaseCnn.ExecContext(ctx, stmt, id)
 	if err != nil {
 		return err
 	}
@@ -185,7 +185,7 @@ func (m *PostgresDBRepo) InsertUser(user data.User) (int, error) {
 	stmt := `insert into users (email, first_name, last_name, password, is_admin, created_at, updated_at)
 		values ($1, $2, $3, $4, $5, $6, $7) returning id`
 
-	err = m.DB.QueryRowContext(ctx, stmt,
+	err = m.DataBaseCnn.QueryRowContext(ctx, stmt,
 		user.Email,
 		user.FirstName,
 		user.LastName,
@@ -213,7 +213,7 @@ func (m *PostgresDBRepo) ResetPassword(id int, password string) error {
 	}
 
 	stmt := `update users set password = $1 where id = $2`
-	_, err = m.DB.ExecContext(ctx, stmt, hashedPassword, id)
+	_, err = m.DataBaseCnn.ExecContext(ctx, stmt, hashedPassword, id)
 	if err != nil {
 		return err
 	}
@@ -230,7 +230,7 @@ func (m *PostgresDBRepo) InsertUserImage(i data.UserImage) (int, error) {
 	stmt := `insert into user_images (user_id, fileName, created_at, updated_at)
 		values ($1, $2, $3, $4) returning id`
 
-	err := m.DB.QueryRowContext(ctx, stmt,
+	err := m.DataBaseCnn.QueryRowContext(ctx, stmt,
 		i.UserID,
 		i.FileName,
 		time.Now(),

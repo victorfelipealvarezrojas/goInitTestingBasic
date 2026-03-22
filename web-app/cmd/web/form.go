@@ -31,6 +31,11 @@ func NewForm(data url.Values) *Form {
 	}
 }
 
+func (f *Form) SetData(data url.Values) {
+	f.Data = data
+	f.Errors = map[string][]string{}
+}
+
 func (f *Form) Has(field string) bool {
 	x := f.Data.Get(field)
 	if x == "" {

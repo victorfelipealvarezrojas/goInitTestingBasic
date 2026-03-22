@@ -19,44 +19,20 @@ type templateData struct {
 	User  data.User
 }
 
-func (app *application) render(response http.ResponseWriter, request *http.Request,
-	name string, dataSubmit *templateData) error {
-
-	parseTemplate, err := template.ParseFiles(path.Join(pathToTemplates, name), path.Join(pathToTemplates, "Base.layout.gohtml"))
-	if err != nil {
-		http.Error(response, "Internal Server Error", http.StatusBadRequest)
-		return err
-	}
-
-	dataSubmit.IP = app.ipFromContext(request.Context())
-
-	dataSubmit.Error = app.Session.PopString(request.Context(), "errors")
-	dataSubmit.Flash = app.Session.PopString(request.Context(), "flash")
-	log.Println("Flash message:", dataSubmit.Flash)
-	log.Println("Error message:", dataSubmit.Error)
-
-	err = parseTemplate.Execute(response, dataSubmit)
-	if err != nil {
-		http.Error(response, "Internal Server Error"+err.Error(), http.StatusBadRequest)
-		return err
-	}
-
-	return nil
-}
-
 func (app *application) Home(response http.ResponseWriter, request *http.Request) {
 	var td = make(map[string]any)
 
+	//NOTE valido si existe algo en session
 	if !app.Session.Exists(request.Context(), "test") {
-		app.Session.Put(request.Context(), "test", time.Now().UTC().String())
-	}
-
-	if app.Session.Exists(request.Context(), "test") {
+		app.Session.Put(request.Context(), "test", "Hit this page at "+time.Now().UTC().String())
+	} else {
 		msg := app.Session.GetString(request.Context(), "test")
 		td["test"] = msg
 	}
 
-	_ = app.render(response, request, "Home.page.gohtml", &templateData{Data: td})
+	tdate := &templateData{Data: td}
+
+	_ = app.render(response, request, "Home.page.gohtml", tdate)
 }
 
 func (app *application) Profile(w http.ResponseWriter, r *http.Request) {
@@ -64,7 +40,7 @@ func (app *application) Profile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *application) Login(response http.ResponseWriter, request *http.Request) {
-	err := request.ParseForm()
+	err := request.ParseForm() // Lo que valida es que la estructura HTTP del request sea parseable: que el Content-Type sea correcto, que el body sea legible, que el encoding sea válido.
 	if err != nil {
 		log.Println("Error parsing form:", err)
 		http.Error(response, "bad request", http.StatusBadRequest)
@@ -98,7 +74,7 @@ func (app *application) Login(response http.ResponseWriter, request *http.Reques
 		return
 	}
 
-	// prevent fixation attacks
+	//NOTE: RenewToken genera un nuevo token de sesión para el usuario autenticado, lo que ayuda a prevenir ataques de fijación de sesión (session fixation). Al renovar el token, se invalida el token anterior
 	_ = app.Session.RenewToken(request.Context())
 
 	app.Session.Put(request.Context(), "flash", "Successfully logged in!")
@@ -114,4 +90,29 @@ func (app *application) Authenticate(r *http.Request, user *data.User, password 
 	}
 	app.Session.Put(r.Context(), "user", user)
 	return true
+}
+
+func (app *application) render(response http.ResponseWriter, request *http.Request,
+	name string, dataSubmit *templateData) error {
+
+	parseTemplate, err := template.ParseFiles(path.Join(pathToTemplates, name), path.Join(pathToTemplates, "Base.layout.gohtml"))
+	if err != nil {
+		http.Error(response, "Render-Internal Server Error", http.StatusBadRequest)
+		return err
+	}
+
+	dataSubmit.IP = app.ipFromContext(request.Context())
+	dataSubmit.Error = app.Session.PopString(request.Context(), "errors")
+	dataSubmit.Flash = app.Session.PopString(request.Context(), "flash")
+
+	log.Println("Flash message:", dataSubmit.Flash)
+	log.Println("Error message:", dataSubmit.Error)
+
+	err = parseTemplate.Execute(response, dataSubmit)
+	if err != nil {
+		http.Error(response, "Render-Internal Server Error: "+err.Error(), http.StatusBadRequest)
+		return err
+	}
+
+	return nil
 }

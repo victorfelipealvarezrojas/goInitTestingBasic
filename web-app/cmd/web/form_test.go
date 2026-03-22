@@ -17,7 +17,7 @@ func TestForm_Has(t *testing.T) {
 
 	postedData := url.Values{}
 	postedData.Add("a", "a value")
-	form = NewForm(postedData)
+	form.SetData(postedData)
 
 	has = form.Has("a")
 	if !has {

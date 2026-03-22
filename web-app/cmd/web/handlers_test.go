@@ -34,7 +34,8 @@ func Test_application_handlers(t *testing.T) {
 		}
 
 		if resp.StatusCode != e.statusCode {
-			t.Errorf("for %s expected %d but got %d", e.name, e.statusCode, resp.StatusCode)
+			body, _ := io.ReadAll(resp.Body)
+			t.Errorf("for %s expected %d but got %d — body: %s", e.name, e.statusCode, resp.StatusCode, string(body))
 		}
 	}
 }
@@ -43,7 +44,7 @@ func Test_application_home(t *testing.T) {
 
 	req, _ := http.NewRequest("GET", "/", nil)
 	req = addContextAndSessionToRequest(req, app)
-	rr := httptest.NewRecorder()
+	rr := httptest.NewRecorder() // esto crea un ResponseRecorder que actúa como un http.ResponseWriter falso para capturar la respuesta en tests.
 
 	handler := http.HandlerFunc(app.Home)
 	handler.ServeHTTP(rr, req)
@@ -128,7 +129,7 @@ func Test_app_login(t *testing.T) {
 		{
 			name: "valid credemtial test",
 			postedData: url.Values{
-				"email":    {"admin@example.com"},
+				"email":    {"admin2@example.com"},
 				"password": {"secret"},
 			},
 			expectedStatusCode:       http.StatusSeeOther,
@@ -139,6 +140,15 @@ func Test_app_login(t *testing.T) {
 			postedData: url.Values{
 				"email":    {"invalid@example.com"},
 				"password": {"invalid"},
+			},
+			expectedStatusCode:       http.StatusSeeOther,
+			expectedLocationRedirect: "/",
+		},
+		{
+			name: "values missing test",
+			postedData: url.Values{
+				"email":    {""},
+				"password": {""},
 			},
 			expectedStatusCode:       http.StatusSeeOther,
 			expectedLocationRedirect: "/",
