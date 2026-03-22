@@ -3,6 +3,9 @@
 run:
 	cd web-app && go run ./cmd/web
 
+test_all:
+	cd web-app && gotestsum --format testname -- ./cmd/web/
+
 test_routes:
 	cd web-app && gotestsum --format testname -- ./cmd/web/ -run Test_application_routes
 
